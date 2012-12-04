@@ -314,7 +314,7 @@ function ding_place2book_form_ding_event_node_form_alter(&$form, &$form_state, $
     '#tree' => TRUE,
   );
   
-  $form['field_event_ticket_price']['und'][0]['value']['#description'] = $p2b_info;
+  $form['field_event_fee']['und'][0]['value']['#description'] = $p2b_info;
   
   $form['capacity'] = array(
     '#type' => 'textfield',
@@ -596,7 +596,7 @@ function place2book_build_xml($node, $service_settings) {
   }
 
   // Set ticket price - multiplied by 100, Place2book receives amount in oere instead of kr.
-  $field_event_ticket_price = field_get_items('node', $node, 'field_event_ticket_price');
+  $field_event_ticket_price = field_get_items('node', $node, 'field_event_fee');
   $xml->event->price->value = $field_event_ticket_price[0]['value'] * 100;
 
   // -- set event times --
