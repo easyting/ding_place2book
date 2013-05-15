@@ -30,7 +30,7 @@ function ding_place2book_enable() {
       'label' => 'Place2book Tickets', 
       'bundle' => 'ding_event', 
       'required' => TRUE,
-      'default_value' => array(array('value' => 'placeholder')),
+      'default_value' => array(array('value' => '')),
       'description' => 'Placeholder for Place2book ticket information and/or order link',
       'display' => array(
         'default' => array(
