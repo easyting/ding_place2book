@@ -1,10 +1,8 @@
 <?php
-
 /**
- * @file ding_place2book.admin.inc
+ * @file
  * Admin forms, page callbacks and related functions.
  */
-
 /**
  * The main settings form.
  */
@@ -93,7 +91,7 @@ function ding_place2book_admin_settings_form($form_state) {
   foreach ($result as $record) {
     $form['ding_place2book_libraries'][$record->nid] = array(
       '#type' => 'textfield',
-      '#title' => 'API key ' . check_plain($record->title),
+      '#title' => t('API key @api', array($record->title)),
       '#default_value' => isset($defaults[$record->nid]) ? $defaults[$record->nid] : '',
       '#description' => t('Optional. If you have several accounts at Place2book, each library can have their own API key. In that case, the base API key will be overridden by the provided key when sending data on events related to this library.'),
     );
@@ -164,7 +162,7 @@ function ding_place2book_kultunaut_form($form_state) {
   foreach ($result as $record) {
     $form['ding_place2book_category_mappings'][$record->tid] = array(
       '#type' => 'select',
-      '#title' => 'Term ' . check_plain($record->name),
+      '#title' => t('Term @term', array('@term' => $record->name)),
       '#default_value' => isset($defaults[$record->tid]) ? $defaults[$record->tid] : '',
       '#options' => $kultunaut_category_options,
       '#description' => t('Optional. Select the kultunaut category to map the Ding! event category term to.'),
@@ -195,7 +193,7 @@ function ding_place2book_kultunaut_form($form_state) {
   foreach ($result as $record) {
     $form['ding_place2book_target_mappings'][$record->tid] = array(
       '#type' => 'select',
-      '#title' => 'Term ' . check_plain($record->name),
+      '#title' => t('Term @term', array('@term' => $record->name)),
       '#default_value' => isset($defaults[$record->tid]) ? $defaults[$record->tid] : '',
       '#options' => $kultunaut_target_options,
       '#description' => t('Optional. Select the kultunaut target to map the Ding! event target term to.'),
@@ -224,6 +222,11 @@ function ding_place2book_kultunaut_form($form_state) {
   return system_settings_form($form);
 }
 
+/**
+ * Custom validation handler for settings form.
+ *
+ * @see ding_place2book_kultunaut_form()
+ */
 function ding_place2book_kultunaut_form_validate($form, &$form_state) {
   $field = $form_state['values']['ding_place2book_kultunaut_categories']['kultunaut_cat_array'];
   if (!is_array(json_decode($field, TRUE))) {
@@ -231,7 +234,7 @@ function ding_place2book_kultunaut_form_validate($form, &$form_state) {
   }
 }
 
-/*
+/**
  * Returns a JSON string containing the default Kultunaut category terms found at http://www.kultunaut.dk/perl/export/nautgenrerxml
  */
 function ding_place2book_kultunaut_cat_json() {
@@ -335,7 +338,7 @@ function ding_place2book_kultunaut_cat_json() {
   return $json;
 }
 
-/*
+/**
  * Returns an array of all Kultunaut category terms
  */
 function place2book_get_kultunaut_categories() {
