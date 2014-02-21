@@ -1,7 +1,9 @@
 <?php
+
 /**
  * @file
  */
+
 /**
  * Implements hook_ctools_plugin_directory().
  */
@@ -211,10 +213,11 @@ function ding_place2book_node_delete($node) {
      * REVIEW: Maybe a clean-up check could be execute by the
      *         administrator or cron?
      */
-    $place2book_id = db_query(
-      'SELECT place2book_id FROM {ding_place2book} WHERE nid=:nid',
-      array(':nid' => $node->nid)
-    )->fetchField(0);
+    $place2book_id = db_select('ding_place2book', 'pb')
+      ->fields('pb', array('place2book_id'))
+      ->condition('nid', $node->nid, '=')
+      ->execute()
+      ->fetchField();
 
     if ($place2book_id) {
       place2book_event_op('delete', $node, $place2book_id);
@@ -228,8 +231,8 @@ function ding_place2book_node_delete($node) {
  */
 function ding_place2book_node_presave($node) {
   //make sure that the placeholder field always gets a value
-  if ($node->type ==='ding_event') {
-    $node->field_place2book_tickets['und']['0']['value']= 'placeholder';
+  if ($node->type === 'ding_event') {
+    $node->field_place2book_tickets['und']['0']['value'] = 'placeholder';
   }
 }
 
@@ -332,7 +335,6 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
 
   // Get the library id for the event
   $group_audience = field_get_items('node', $node, 'group_audience');
-  //$library_id = db_query('SELECT etid FROM {og} WHERE gid = :gid', array(':gid' => $group_audience[0]['gid']))->fetchField();
   $library_id = db_select('og', 'og')
     ->fields('og', array('etid'))
     ->condition('gid', $group_audience[0]['gid'])
@@ -505,7 +507,6 @@ function place2book_build_xml($node, $service_settings) {
   //-- set location data --
   // If library has been selected, use location data from the library.
   $group_audience = field_get_items('node', $node, 'group_audience');
-  //$library_id = db_query('SELECT etid FROM {og} WHERE gid = :gid', array(':gid' => $group_audience[0]['gid']))->fetchField();
 
   $library_id = db_select('og', 'og')
     ->fields('og', array('etid'))
@@ -514,16 +515,6 @@ function place2book_build_xml($node, $service_settings) {
     ->fetchField();
 
   if ($library_id) {
-    /*$libloc_result = db_query('SELECT 	n.title,
-    							a.field_address_thoroughfare AS street,
-    							a.field_address_premise AS additional,
-                               	a.field_address_postal_code AS postal_code,
-                                a.field_address_locality AS city,
-                                UPPER(a.field_address_country) AS country
-                        FROM node n JOIN field_data_field_address a
-                        ON n.nid = a.entity_id
-                        WHERE n.nid = :nid', array(':nid' => $library_id));*/
-
     $libloc_result = db_select('node', 'n')
       ->join('field_data_field_address', 'a', 'n.nid=a.entity_id')
       ->fields('n', array('title'))
@@ -586,20 +577,14 @@ function place2book_build_xml($node, $service_settings) {
   }
 
   // -- set kultunaut terms --
-
   // Set kultunaut age group
   $field_ding_event_target = field_get_items('node', $node, 'field_ding_event_target');
   // I have the term ids already, so the following query will give
   // me term name to use on kultunaut_age_group
   if (isset($field_ding_event_target[0])) {
-    /*$event_target_result = db_query('SELECT tid, name
-                                FROM {taxonomy_term_data}
-                                WHERE tid = :term_id', array(':term_id' => $field_ding_event_target[0]['tid']));*/
     $term = taxonomy_term_load($field_ding_event_target[0]['tid']);
-    //foreach ($event_target_result as $event_target) {
-      $event_target_tid = $term->tid;
-      $event_target_name = $term->name;
-    //}
+    $event_target_tid = $term->tid;
+    $event_target_name = $term->name;
 
     //check configuration if we should map the event target to a kultunaut age group/target
     $target_map_array = variable_get('ding_place2book_target_mappings', array());
@@ -616,14 +601,9 @@ function place2book_build_xml($node, $service_settings) {
   // I have the term ids already, so the following query will give
   // me term name to use on kultunaut_export_category
   if (isset($field_ding_event_category[0])) {
-    /*$event_category_result = db_query('SELECT tid, name
-                                FROM {taxonomy_term_data}
-                                WHERE tid = :term_id', array(':term_id' => $field_ding_event_category[0]['tid']));*/
     $term = taxonomy_term_load($field_ding_event_category[0]['tid']);
-    //foreach ($event_category_result as $event_category) {
-      $event_category_tid = $term->tid;
-      $event_category_name = $term->name;
-    //}
+    $event_category_tid = $term->tid;
+    $event_category_name = $term->name;
 
     //check configuration if we should map the event category to a kultunaut category
     $category_map_array = variable_get('ding_place2book_category_mappings', array());
@@ -657,7 +637,6 @@ function place2book_settings($nid = NULL) {
 
   // Check database for node specific settings, if nid is defined.
   if ($nid) {
-    //$result = db_query('SELECT * FROM {ding_place2book} WHERE nid = :nid', array(':nid' => $nid));
     $result = db_select('ding_place2book', 'pb')
       ->fields('pb')
       ->condition('nid', $nid, '=')
@@ -686,27 +665,6 @@ function place2book_settings($nid = NULL) {
 function _place2book_db_op($op, $node, $place2book_id = NULL) {
   switch ($op) {
     case 'insert':
-      /*db_query('INSERT INTO {ding_place2book} ( nid,
-                                                place2book_id,
-                                                maintain_copy,
-                                                capacity,
-                                                kultunaut_export,
-                                                passive)
-                                        VALUES (:nid,
-                                                :place2book_id,
-                                                :maintain_copy,
-                                                :capacity,
-                                                :kultunaut_export,
-                                                :passive)',
-                                          array(
-                                                ':nid' => $node->nid,
-                                                ':place2book_id' => $place2book_id,
-                                                ':maintain_copy' => $node->place2book['maintain_copy'],
-                                                ':capacity' => $node->capacity,
-                                                ':kultunaut_export' => $node->place2book['kultunaut_export'],
-                                                ':passive' => $node->place2book['passive'],
-                                                )
-      );*/
       db_insert('ding_place2book')
         ->fields(array(
           'nid' => $node->nid,
@@ -720,22 +678,6 @@ function _place2book_db_op($op, $node, $place2book_id = NULL) {
       break;
 
     case 'update':
-      /*db_query('UPDATE {ding_place2book}
-                SET place2book_id = :place2book_id,
-                    maintain_copy = :maintain_copy,
-                    capacity = :capacity,
-                    kultunaut_export = :kultunaut_export,
-                    passive = :passive
-                WHERE nid = :nid',
-                array(
-                      ':place2book_id' => $place2book_id,
-                      ':maintain_copy' => $node->place2book['maintain_copy'],
-                      ':capacity' => $node->capacity,
-                      ':kultunaut_export' => $node->place2book['kultunaut_export'],
-                      ':passive' => $node->place2book['passive'],
-                      ':nid' => $node->nid,
-                     )
-      );*/
       db_merge('ding_place2book')
         ->fields(array(
           'nid' => $node->nid,
@@ -750,14 +692,6 @@ function _place2book_db_op($op, $node, $place2book_id = NULL) {
       break;
 
     case 'delete':
-      /*db_query('DELETE FROM {ding_place2book}
-                WHERE nid = :nid
-                AND place2book_id = :place2book_id',
-                array(
-                      ':nid' => $node-nid,
-                      ':place2book_id' => $place2book_id
-                     )
-      );*/
       db_delete('ding_place2book')
         ->condition('nid', $node->nid, '=')
         ->condition('place2book_id', $place2book_id, '=')
@@ -816,8 +750,13 @@ function render_place2book_ticketsinfo($node) {
   $maintain_copy = 0;
   $passive = 0;
 
-  //get data from ding_place2book table
-  $place2book_result = db_query('SELECT place2book_id, maintain_copy, passive FROM {ding_place2book} WHERE nid = :nid', array(':nid' => $node->nid));
+  // Get data from ding_place2book table.
+  $place2book_result = db_select('ding_place2book', 'pb')
+    ->fields('pb', array('place2book_id', 'maintain_copy', 'passive'))
+    ->condition('nid', $node->nid, '=')
+    ->execute()
+    ->fetchAll();
+
   foreach ($place2book_result as $place2book) {
     $place2book_id = $place2book->place2book_id;
     $maintain_copy = $place2book->maintain_copy;
@@ -842,7 +781,11 @@ function render_place2book_ticketsinfo($node) {
 
       //get the library id for the event
       $group_audience = field_get_items('node', $node, 'group_audience');
-      $library_id = db_query('SELECT etid FROM {og} WHERE gid = :gid', array(':gid' => $group_audience[0]['gid']))->fetchField();
+      $library_id = db_select('og', 'og')
+        ->fields('og', array('etid'))
+        ->condition('gid', $group_audience[0]['gid'], '=')
+        ->execute()
+        ->fetchField();
 
       $api_key = place2book_get_api_key($library_id);
       if ($api_key == NULL) {
@@ -854,9 +797,9 @@ function render_place2book_ticketsinfo($node) {
         'X-PLACE2BOOK-EVENT-ID' => $place2book_id,
       );
       $options = array(
-                'method' => 'GET',
-                'headers' => $headers,
-              );
+        'method' => 'GET',
+        'headers' => $headers,
+      );
       $p2b_result = drupal_http_request($service_settings['service_url'] . '/available_tickets', $options);
 
       //we must have a sales-status header
@@ -867,23 +810,21 @@ function render_place2book_ticketsinfo($node) {
           $type = 'closed-admission';
         }
         else {
-
           /*
            * check if we have no tickets left
            * number from Available-Tickets header is a string and must be tested as such
            * also, Available-Tickets header can have a negative value, which we also interpret as "no ticket left"
            */
-          if (!empty($p2b_result->headers['Available-Tickets']) && (int)$p2b_result->headers['Available-Tickets'] <= 0) {
+          if (!empty($p2b_result->headers['Available-Tickets']) && (int) $p2b_result->headers['Available-Tickets'] <= 0) {
             $type = 'no-tickets-left';
           }
           else {
-
             /*
-             * check to see if we should present an link for ordering a ticket
+             * Check to see if we should present an link for ordering a ticket
              * number from Available-Tickets header is a string and must be typecast as integer
              * Available-Tickets header can also be the string "Ubegraenset antal" (unlimited), so we check for existence of "antal" in the string
              */
-            if ($p2b_result->headers['sales-status'] == 'open' && ((int)$p2b_result->headers['available-tickets'] > 0 || strpos($p2b_result->headers['available-tickets'], 'antal') > 0)) {
+            if ($p2b_result->headers['sales-status'] == 'open' && ((int) $p2b_result->headers['available-tickets'] > 0 || strpos($p2b_result->headers['available-tickets'], 'antal') > 0)) {
               $type = 'order-link';
               $url = $p2b_result->headers['location'];
             }
@@ -893,7 +834,11 @@ function render_place2book_ticketsinfo($node) {
     }
   }
 
-  return theme('place2book_ticketsinfo', array('place2book_id' => $place2book_id, 'url' => $url, 'type' => $type));
+  return theme('place2book_ticketsinfo', array(
+    'place2book_id' => $place2book_id,
+    'url' => $url,
+    'type' => $type
+  ));
 }
 
 /**
