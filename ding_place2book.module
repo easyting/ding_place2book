@@ -1,6 +1,11 @@
 <?php
+
 /**
- * Implementation of hook_ctools_plugin_directory().
+ * @file
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
  */
 function ding_place2book_ctools_plugin_directory($module, $plugin) {
   if ($module == 'ctools' && $plugin == 'content_types') {
@@ -9,56 +14,12 @@ function ding_place2book_ctools_plugin_directory($module, $plugin) {
 }
 
 /**
-* Implementation of hook_enable().
-*/
-function ding_place2book_enable() {
-  /*
-   * Create a field on the Event nodetype as a placeholder for the order-button/info-area
-   */
-  // Check if our field is not already created.
-  if (!field_info_field('field_place2book_tickets')) {
-    $field = array(
-        'field_name' => 'field_place2book_tickets',
-        'type' => 'text',
-    );
-    field_create_field($field);
-
-    // Create the instance on the bundle.
-    $instance = array(
-      'field_name' => 'field_place2book_tickets',
-      'entity_type' => 'node',
-      'label' => 'Place2book Tickets',
-      'bundle' => 'ding_event',
-      'required' => TRUE,
-      'default_value' => array(array('value' => '')),
-      'description' => 'Placeholder for Place2book ticket information and/or order link',
-      'display' => array(
-        'default' => array(
-          'label' => 'hidden',
-          'settings' => array(),
-          'weight' => 10,
-        ),
-      ),
-    );
-    field_create_instance($instance);
-  }
-}
-
-/**
-* Implementation of hook_disable().
-*/
-function ding_place2book_disable() {
-  field_delete_field('field_place2book_tickets');
-  field_purge_batch(10);
-}
-
-/**
-* Called via AJAX/JavaScript.
-* Returns (prints) JSON containing ticket information from Place2book
-*
-* @param int $nid
-* @return null
-*/
+ * Called via AJAX/JavaScript.
+ * Returns (prints) JSON containing ticket information from Place2book
+ *
+ * @param int $nid
+ * @return null
+ */
 function ding_place2book_get_ticketinfo($nid) {
   //get the node
   $eventnode = node_load($nid);
@@ -73,7 +34,7 @@ function ding_place2book_get_ticketinfo($nid) {
 }
 
 /**
- * Implementation of hook_init().
+ * Implements hook_init().
  */
 function ding_place2book_init() {
   drupal_add_js(drupal_get_path('module', 'ding_place2book') . '/js/ding_place2book.js');
@@ -81,8 +42,8 @@ function ding_place2book_init() {
 }
 
 /**
-* Implements hook_image_default_styles().
-*/
+ * Implements hook_image_default_styles().
+ */
 function ding_place2book_image_default_styles() {
   $styles = array();
 
@@ -102,7 +63,7 @@ function ding_place2book_image_default_styles() {
 }
 
 /**
- * Implementation of hook_permission().
+ * Implements hook_permission().
  */
 function ding_place2book_permission() {
   return array(
@@ -114,7 +75,7 @@ function ding_place2book_permission() {
 }
 
 /**
- * Implementation of hook_menu().
+ * Implements hook_menu().
  */
 function ding_place2book_menu() {
   $items = array();
@@ -161,8 +122,8 @@ function ding_place2book_menu() {
   return $items;
 }
 
-/*
- * Implementation of hook_node_view()
+/**
+ * Implements hook_node_view().
  */
 function ding_place2book_node_view($node, $view_mode, $langcode) {
   // We only handle event nodes.
@@ -176,8 +137,24 @@ function ding_place2book_node_view($node, $view_mode, $langcode) {
   }
 }
 
-/*
- * Implementation of hook_node_insert()
+/**
+ * Implements hook_node_load().
+ */
+function ding_place2book_node_load($nodes) {
+  foreach ($nodes as $nid => $node) {
+    $p2b = place2book_settings($nid);
+    $nodes[$nid]->place2book = array(
+      'capacity' => $p2b['capacity'],
+      'place2book_id' => !empty($p2b['place2book_id']) ? $p2b['place2book_id'] : -1,
+      'maintain_copy' => !empty($p2b['maintain_copy']) ? $p2b['maintain_copy'] : $p2b['defaults']['maintain_copy'],
+      'kultunaut_export' => !empty($p2b['kultunaut_export']) ? $p2b['kultunaut_export'] : $p2b['defaults']['kultunaut_export'],
+      'passive' => !empty($p2b['passive']) ? $p2b['passive'] : $p2b['defaults']['passive'],
+    );
+  }
+}
+
+/**
+ * Implements hook_node_insert().
  */
 function ding_place2book_node_insert($node) {
   // We only handles event nodes.
@@ -193,8 +170,8 @@ function ding_place2book_node_insert($node) {
   }
 }
 
-/*
- * Implementation of hook_node_update()
+/**
+ * Implements hook_node_update().
  */
 function ding_place2book_node_update($node) {
   if ($node->type == "ding_event") {
@@ -233,13 +210,7 @@ function ding_place2book_node_update($node) {
       // maintain_copy continues previous state and is still off
       // - which means we only update the ding_place2book table
       else {
-        $exists = db_query('SELECT nid FROM {ding_place2book} WHERE nid = :nid', array(':nid' => $node->nid));
-        if ($exists->rowCount() > 0) {
-          _place2book_db_op('update', $node, -1);
-        }
-        else {
-          _place2book_db_op('insert', $node, -1);
-        }
+        _place2book_db_op('update', $node, -1);
       }
     }
   }
@@ -258,10 +229,11 @@ function ding_place2book_node_delete($node) {
      * REVIEW: Maybe a clean-up check could be execute by the
      *         administrator or cron?
      */
-    $place2book_id = db_query(
-      'SELECT place2book_id FROM {ding_place2book} WHERE nid=:nid',
-      array(':nid' => $node->nid)
-    )->fetchField(0);
+    $place2book_id = db_select('ding_place2book', 'pb')
+      ->fields('pb', array('place2book_id'))
+      ->condition('nid', $node->nid, '=')
+      ->execute()
+      ->fetchField();
 
     if ($place2book_id) {
       place2book_event_op('delete', $node, $place2book_id);
@@ -271,22 +243,25 @@ function ding_place2book_node_delete($node) {
 }
 
 /**
- * Implementation of hook_node_presave().
+ * Implements hook_node_presave().
  */
 function ding_place2book_node_presave($node) {
   //make sure that the placeholder field always gets a value
-  if ($node->type ==='ding_event') {
-    $node->field_place2book_tickets['und']['0']['value']= 'placeholder';
+  if ($node->type === 'ding_event') {
+    $node->field_place2book_tickets['und']['0']['value'] = 'placeholder';
   }
 }
 
 /**
- * Implementation of hook_form_FORM_ID_alter().
+ * Implements hook_form_FORM_ID_alter().
  */
 function ding_place2book_form_ding_event_node_form_alter(&$form, &$form_state, $form_id) {
-  // Get the nid in a PHP 5.3 safe way and load settings for this node.
-  $nid = isset($form['nid']['#value']) ? $form['nid']['#value'] : NULL;
-  $node_settings = place2book_settings($nid);
+  $node_settings = place2book_settings(NULL);
+  if (!empty($form['#node']->nid)) {
+    $node_settings = $form['#node']->place2book;
+  }
+
+  $form['group_audience'][LANGUAGE_NONE]['#required'] = TRUE;
 
   // Service settings.
   $service_settings = variable_get('ding_place2book', array());
@@ -295,7 +270,7 @@ function ding_place2book_form_ding_event_node_form_alter(&$form, &$form_state, $
     return;
   }
 
-  if ($node_settings['place2book_id'] && $node_settings['place2book_id'] != -1) {
+  if (!empty($node_settings['place2book_id']) && $node_settings['place2book_id'] != -1) {
     $p2b_link = l($node_settings['place2book_id'], $service_settings['event_url'] . '/' . $node_settings['place2book_id'] . '/edit', array('absolute' => TRUE));
     $p2b_info = t('Ticket price is submitted to Place2book as the ticket type with name ADGANG. If more ticket types on this event is needed, go to Place2book ID !link. (Note: You may need to log on)', array('!link' => $p2b_link));
   }
@@ -318,7 +293,7 @@ function ding_place2book_form_ding_event_node_form_alter(&$form, &$form_state, $
 
   $form['field_event_fee']['und'][0]['value']['#description'] = $p2b_info;
 
-  $form['capacity'] = array(
+  $form['place2book']['capacity'] = array(
     '#type' => 'textfield',
     '#title' => t('Event capacity'),
     '#size' => 5,
@@ -377,9 +352,14 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
     return;
   }
 
-  //get the library id for the event
+  // Get the library id for the event
   $group_audience = field_get_items('node', $node, 'group_audience');
-  $library_id = db_query('SELECT etid FROM {og} WHERE gid = :gid', array(':gid' => $group_audience[0]['gid']))->fetchField();
+
+  $library_id = db_select('og', 'og')
+    ->fields('og', array('etid'))
+    ->condition('gid', $group_audience[0]['gid'])
+    ->execute()
+    ->fetchField();
 
   // Build XML headers.
   $api_key = place2book_get_api_key($library_id);
@@ -395,10 +375,10 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
     case 'insert':
       $xml = place2book_build_xml($node, $service_settings);
       $options = array(
-                  'method' => 'POST',
-                  'data' => $xml->asXML(),
-                  'headers' => $headers,
-                );
+        'method' => 'POST',
+        'data' => $xml->asXML(),
+        'headers' => $headers,
+      );
       $req_result = drupal_http_request($service_settings['service_url'] . '/create_event', $options);
 
       // Catch insert error by checking the event id.
@@ -408,14 +388,7 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
       }
       else {
         drupal_set_message(t('Event created on Place2book with remote ID %id', array('%id' => $req_result->headers['event-id'])));
-
-        // Update local database.
-        if ($place2book_id != NULL) {
-          _place2book_db_op('update', $node, $req_result->headers['event-id']);
-        }
-        else {
-          _place2book_db_op('insert', $node, $req_result->headers['event-id']);
-        }
+        _place2book_db_op('update', $node, $req_result->headers['event-id']);
       }
       break;
 
@@ -423,10 +396,10 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
       $xml = place2book_build_xml($node, $service_settings);
       $headers['X-PLACE2BOOK-EVENT-ID'] = $place2book_id;
       $options = array(
-                  'method' => 'POST',
-                  'data' => $xml->asXML(),
-                  'headers' => $headers,
-                );
+        'method' => 'POST',
+        'data' => $xml->asXML(),
+        'headers' => $headers,
+      );
       $req_result = drupal_http_request($service_settings['service_url'] . '/update_event', $options);
 
       // Catch update error by checking the return code.
@@ -436,7 +409,6 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
       }
       else {
         drupal_set_message(t('Event updated on Place2book with remote ID %id', array('%id' => $place2book_id)));
-
         // Update place2book settings table.
         _place2book_db_op('update', $node, $place2book_id);
       }
@@ -445,9 +417,9 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
     case 'delete':
       $headers['X-PLACE2BOOK-EVENT-ID'] = $place2book_id;
       $options = array(
-                  'method' => 'POST',
-                  'headers' => $headers,
-                );
+        'method' => 'POST',
+        'headers' => $headers,
+      );
       $req_result = drupal_http_request($service_settings['service_url'] . '/delete_event', $options);
 
       if ($req_result->error != 'Accepted') {
@@ -474,9 +446,8 @@ function place2book_event_op($op, $node, $place2book_id = NULL) {
   if (isset($req_result->headers['event-id'])) {
     return $req_result->headers['event-id'];
   }
-  else {
-    return NULL;
-  }
+
+  return NULL;
 }
 
 /**
@@ -545,7 +516,7 @@ function place2book_build_xml($node, $service_settings) {
 
   // Set long description.
   $field_ding_body = field_get_items('node', $node, 'field_ding_body');
-  $xml->event->description_long = $field_ding_body[0]['value'];
+  $xml->event->description_long = isset($field_ding_body[0]) ? $field_ding_body[0]['value'] : '';
 
   // Set sales window times empty - and they will use the defaults in place2book.
   $xml->event->sale_open = '';
@@ -554,20 +525,25 @@ function place2book_build_xml($node, $service_settings) {
   //-- set location data --
   // If library has been selected, use location data from the library.
   $group_audience = field_get_items('node', $node, 'group_audience');
-  $library_id = db_query('SELECT etid FROM {og} WHERE gid = :gid', array(':gid' => $group_audience[0]['gid']))->fetchField();
+
+  $library_id = db_select('og', 'og')
+    ->fields('og', array('etid'))
+    ->condition('gid', $group_audience[0]['gid'], '=')
+    ->execute()
+    ->fetchField();
 
   if ($library_id) {
-    $libloc_result = db_query('SELECT 	n.title,
-    							a.field_address_thoroughfare AS street,
-    							a.field_address_premise AS additional,
-                               	a.field_address_postal_code AS postal_code,
-                                a.field_address_locality AS city,
-                                UPPER(a.field_address_country) AS country
-                        FROM node n JOIN field_data_field_address a
-                        ON n.nid = a.entity_id
-                        WHERE n.nid = :nid', array(':nid' => $library_id));
+    $query = db_select('node', 'n')->fields('n', array('title'));
+    $query->join('field_data_field_address', 'a', 'n.nid = a.entity_id');
+    $query->addField('a', 'field_address_thoroughfare', 'street');
+    $query->addField('a', 'field_address_premise', 'additional');
+    $query->addField('a', 'field_address_locality', 'postal_code');
+    $query->addField('a', 'field_address_locality', 'city');
+    $query->addField('a', 'field_address_country', 'country');
+    $query->condition('nid', $library_id, '=');
+    $result = $query->execute()->fetchAll();
 
-    foreach ($libloc_result as $libloc) {
+    foreach ($result as $libloc) {
       $xml->event->venue->name = $libloc->title;
       $xml->event->venue->address1 = $libloc->street;
       $xml->event->venue->address2 = $libloc->additional;
@@ -592,8 +568,8 @@ function place2book_build_xml($node, $service_settings) {
   }
 
   // Set capacity - and if provided, unflag unlimited_capacity.
-  if (isset($node->capacity) && $node->capacity > 0) {
-    $xml->event->capacity = $node->capacity;
+  if (isset($node->place2book['capacity']) && $node->place2book['capacity'] > 0) {
+    $xml->event->capacity = $node->place2book['capacity'];
     $xml->event->unlimited_capacity = 0;
   }
 
@@ -617,19 +593,14 @@ function place2book_build_xml($node, $service_settings) {
   }
 
   // -- set kultunaut terms --
-
   // Set kultunaut age group
   $field_ding_event_target = field_get_items('node', $node, 'field_ding_event_target');
   // I have the term ids already, so the following query will give
   // me term name to use on kultunaut_age_group
   if (isset($field_ding_event_target[0])) {
-    $event_target_result = db_query('SELECT tid, name
-                                FROM {taxonomy_term_data}
-                                WHERE tid = :term_id', array(':term_id' => $field_ding_event_target[0]['tid']));
-    foreach ($event_target_result as $event_target) {
-      $event_target_tid = $event_target->tid;
-      $event_target_name = $event_target->name;
-    }
+    $term = taxonomy_term_load($field_ding_event_target[0]['tid']);
+    $event_target_tid = $term->tid;
+    $event_target_name = $term->name;
 
     //check configuration if we should map the event target to a kultunaut age group/target
     $target_map_array = variable_get('ding_place2book_target_mappings', array());
@@ -646,13 +617,9 @@ function place2book_build_xml($node, $service_settings) {
   // I have the term ids already, so the following query will give
   // me term name to use on kultunaut_export_category
   if (isset($field_ding_event_category[0])) {
-    $event_category_result = db_query('SELECT tid, name
-                                FROM {taxonomy_term_data}
-                                WHERE tid = :term_id', array(':term_id' => $field_ding_event_category[0]['tid']));
-    foreach ($event_category_result as $event_category) {
-      $event_category_tid = $event_category->tid;
-      $event_category_name = $event_category->name;
-    }
+    $term = taxonomy_term_load($field_ding_event_category[0]['tid']);
+    $event_category_tid = $term->tid;
+    $event_category_name = $term->name;
 
     //check configuration if we should map the event category to a kultunaut category
     $category_map_array = variable_get('ding_place2book_category_mappings', array());
@@ -667,7 +634,7 @@ function place2book_build_xml($node, $service_settings) {
   // Set kultunaut picture URL
   $field_list_image = field_get_items('node', $node, 'field_list_image');
   //the uri of the image file is not found in the updated node object - we retrieve it with file_load
-  $list_image_fileinfo = file_load($field_list_image[0]['fid']);
+  $list_image_fileinfo = isset($field_list_image[0]) ? file_load($field_list_image[0]['fid']) : NULL;
   if (!empty($list_image_fileinfo->uri)) {
     //this module provides a style, ding_kultunaut_square, which we invoke here
     $xml->event->kultunaut_picture_uri = image_style_url('ding_kultunaut_square', $list_image_fileinfo->uri);
@@ -682,23 +649,21 @@ function place2book_build_xml($node, $service_settings) {
  */
 function place2book_settings($nid = NULL) {
   // Get default values.
-  $settings = variable_get('ding_place2book_event_nodes', array());
+  $settings = variable_get('ding_place2book_event_nodes', array('place2book_id' => NULL));
 
   // Check database for node specific settings, if nid is defined.
   if ($nid) {
-    $result = db_query('SELECT * FROM {ding_place2book} WHERE nid = :nid', array(':nid' => $nid));
-    if ($result->rowCount() > 0) {
-      $settings = $result->fetchAssoc();
+    $result = db_select('ding_place2book', 'pb')
+      ->fields('pb')
+      ->condition('nid', $nid, '=')
+      ->execute()
+      ->fetchAllAssoc('nid');
+
+    if (count($result)) {
+      $settings = array_merge($settings, (array)$result[$nid]);
     }
-    //add place2book_id to define it if no database settings found
-    else {
-      $settings['place2book_id'] = NULL;
-    }
-  //add place2book_id to define it if nid is not defined
   }
-  else {
-    $settings['place2book_id'] = NULL;
-  }
+
   return $settings;
 }
 
@@ -716,57 +681,37 @@ function place2book_settings($nid = NULL) {
 function _place2book_db_op($op, $node, $place2book_id = NULL) {
   switch ($op) {
     case 'insert':
-      db_query('INSERT INTO {ding_place2book} ( nid,
-                                                place2book_id,
-                                                maintain_copy,
-                                                capacity,
-                                                kultunaut_export,
-                                                passive)
-                                        VALUES (:nid,
-                                                :place2book_id,
-                                                :maintain_copy,
-                                                :capacity,
-                                                :kultunaut_export,
-                                                :passive)',
-                                          array(
-                                                ':nid' => $node->nid,
-                                                ':place2book_id' => $place2book_id,
-                                                ':maintain_copy' => $node->place2book['maintain_copy'],
-                                                ':capacity' => $node->capacity,
-                                                ':kultunaut_export' => $node->place2book['kultunaut_export'],
-                                                ':passive' => $node->place2book['passive'],
-                                                )
-      );
+      db_insert('ding_place2book')
+        ->fields(array(
+          'nid' => $node->nid,
+          'place2book_id' => $place2book_id,
+          'maintain_copy' => $node->place2book['maintain_copy'],
+          'capacity' => $node->place2book['capacity'],
+          'kultunaut_export' => $node->place2book['kultunaut_export'],
+          'passive' => $node->place2book['passive'],
+        ))
+        ->execute();
       break;
 
     case 'update':
-      db_query('UPDATE {ding_place2book}
-                SET place2book_id = :place2book_id,
-                    maintain_copy = :maintain_copy,
-                    capacity = :capacity,
-                    kultunaut_export = :kultunaut_export,
-                    passive = :passive
-                WHERE nid = :nid',
-                array(
-                      ':place2book_id' => $place2book_id,
-                      ':maintain_copy' => $node->place2book['maintain_copy'],
-                      ':capacity' => $node->capacity,
-                      ':kultunaut_export' => $node->place2book['kultunaut_export'],
-                      ':passive' => $node->place2book['passive'],
-                      ':nid' => $node->nid,
-                     )
-      );
+      db_merge('ding_place2book')
+        ->fields(array(
+          'nid' => $node->nid,
+          'place2book_id' => $place2book_id,
+          'maintain_copy' => $node->place2book['maintain_copy'],
+          'capacity' => $node->place2book['capacity'],
+          'kultunaut_export' => $node->place2book['kultunaut_export'],
+          'passive' => $node->place2book['passive'],
+        ))
+        ->condition('nid', $node->nid, '=')
+        ->execute();
       break;
 
     case 'delete':
-      db_query('DELETE FROM {ding_place2book}
-                WHERE nid = :nid
-                AND place2book_id = :place2book_id',
-                array(
-                      ':nid' => $node-nid,
-                      ':place2book_id' => $place2book_id
-                     )
-      );
+      db_delete('ding_place2book')
+        ->condition('nid', $node->nid, '=')
+        ->condition('place2book_id', $place2book_id, '=')
+        ->execute();
       break;
 
     default:
@@ -774,7 +719,7 @@ function _place2book_db_op($op, $node, $place2book_id = NULL) {
   }
 }
 
-/*
+/**
  * validation function for checking place2book settings that need to be integers
  */
 function _place2book_setting_is_numeric($element, &$form_state) {
@@ -811,7 +756,7 @@ function place2book_get_api_key($library_id = NULL) {
   return $api_key;
 }
 
-/*
+/**
  * Rendering function for place2book tickets info
  */
 function render_place2book_ticketsinfo($node) {
@@ -821,8 +766,13 @@ function render_place2book_ticketsinfo($node) {
   $maintain_copy = 0;
   $passive = 0;
 
-  //get data from ding_place2book table
-  $place2book_result = db_query('SELECT place2book_id, maintain_copy, passive FROM {ding_place2book} WHERE nid = :nid', array(':nid' => $node->nid));
+  // Get data from ding_place2book table.
+  $place2book_result = db_select('ding_place2book', 'pb')
+    ->fields('pb', array('place2book_id', 'maintain_copy', 'passive'))
+    ->condition('nid', $node->nid, '=')
+    ->execute()
+    ->fetchAll();
+
   foreach ($place2book_result as $place2book) {
     $place2book_id = $place2book->place2book_id;
     $maintain_copy = $place2book->maintain_copy;
@@ -838,7 +788,7 @@ function render_place2book_ticketsinfo($node) {
   $field_event_date = field_get_items('node', $node, 'field_event_date');
   $event_timestamp = strtotime($field_event_date[0]['value'] . ' ' . $field_event_date[0]['timezone_db']);
 
-  if (time() > $event_timestamp) {
+  if (REQUEST_TIME > $event_timestamp) {
     $type = 'event-over';
   }
   else {
@@ -847,7 +797,11 @@ function render_place2book_ticketsinfo($node) {
 
       //get the library id for the event
       $group_audience = field_get_items('node', $node, 'group_audience');
-      $library_id = db_query('SELECT etid FROM {og} WHERE gid = :gid', array(':gid' => $group_audience[0]['gid']))->fetchField();
+      $library_id = db_select('og', 'og')
+        ->fields('og', array('etid'))
+        ->condition('gid', $group_audience[0]['gid'], '=')
+        ->execute()
+        ->fetchField();
 
       $api_key = place2book_get_api_key($library_id);
       if ($api_key == NULL) {
@@ -859,9 +813,9 @@ function render_place2book_ticketsinfo($node) {
         'X-PLACE2BOOK-EVENT-ID' => $place2book_id,
       );
       $options = array(
-                'method' => 'GET',
-                'headers' => $headers,
-              );
+        'method' => 'GET',
+        'headers' => $headers,
+      );
       $p2b_result = drupal_http_request($service_settings['service_url'] . '/available_tickets', $options);
 
       //we must have a sales-status header
@@ -872,23 +826,21 @@ function render_place2book_ticketsinfo($node) {
           $type = 'closed-admission';
         }
         else {
-
           /*
            * check if we have no tickets left
            * number from Available-Tickets header is a string and must be tested as such
            * also, Available-Tickets header can have a negative value, which we also interpret as "no ticket left"
            */
-          if (!empty($p2b_result->headers['Available-Tickets']) && (int)$p2b_result->headers['Available-Tickets'] <= 0) {
+          if (!empty($p2b_result->headers['Available-Tickets']) && (int) $p2b_result->headers['Available-Tickets'] <= 0) {
             $type = 'no-tickets-left';
           }
           else {
-
             /*
-             * check to see if we should present an link for ordering a ticket
+             * Check to see if we should present an link for ordering a ticket
              * number from Available-Tickets header is a string and must be typecast as integer
              * Available-Tickets header can also be the string "Ubegraenset antal" (unlimited), so we check for existence of "antal" in the string
              */
-            if ($p2b_result->headers['sales-status'] == 'open' && ((int)$p2b_result->headers['available-tickets'] > 0 || strpos($p2b_result->headers['available-tickets'], 'antal') > 0)) {
+            if ($p2b_result->headers['sales-status'] == 'open' && ((int) $p2b_result->headers['available-tickets'] > 0 || strpos($p2b_result->headers['available-tickets'], 'antal') > 0)) {
               $type = 'order-link';
               $url = $p2b_result->headers['location'];
             }
@@ -898,11 +850,15 @@ function render_place2book_ticketsinfo($node) {
     }
   }
 
-  return theme('place2book_ticketsinfo', array('place2book_id' => $place2book_id, 'url' => $url, 'type' => $type));
+  return theme('place2book_ticketsinfo', array(
+    'place2book_id' => $place2book_id,
+    'url' => $url,
+    'type' => $type
+  ));
 }
 
-/*
- * ticketsinfo theme function
+/**
+ * Tickets info theme function.
  */
 function theme_place2book_ticketsinfo($variables) {
   $output = '';
@@ -931,7 +887,7 @@ function theme_place2book_ticketsinfo($variables) {
   return $output;
 }
 
-/*
+/**
  * Implements hook_theme().
  */
 function ding_place2book_theme() {
