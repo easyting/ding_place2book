@@ -1,7 +1,7 @@
 <?php
 
 /**
- * @file ding_place2book.admin.inc
+ * @file
  * Admin forms, page callbacks and related functions.
  */
 
@@ -85,15 +85,17 @@ function ding_place2book_admin_settings_form($form_state) {
   $defaults = variable_get('ding_place2book_libraries', array());
 
   // Find all libraries and order them by title.
-  // @todo use drupal native method to get terms instead of plain SQL
-  $result = db_query("SELECT n.nid, n.title FROM {node} n
-                      WHERE type = 'ding_library'
-                      ORDER BY title");
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'ding_library')
+    ->propertyOrderBy('title', 'DESC');
+  $entity_result = $query->execute();
+  $result = node_load_multiple(array_keys($entity_result['node']));
 
   foreach ($result as $record) {
     $form['ding_place2book_libraries'][$record->nid] = array(
       '#type' => 'textfield',
-      '#title' => 'API key ' . check_plain($record->title),
+      '#title' => t('API key for @api', array('@api' => $record->title)),
       '#default_value' => isset($defaults[$record->nid]) ? $defaults[$record->nid] : '',
       '#description' => t('Optional. If you have several accounts at Place2book, each library can have their own API key. In that case, the base API key will be overridden by the provided key when sending data on events related to this library.'),
     );
@@ -148,15 +150,9 @@ function ding_place2book_kultunaut_form($form_state) {
 
   $kultunaut_category_options = array('' => t('Choose')) + place2book_get_kultunaut_categories();
 
-  // Find all terms in the event category vocabulary
-  // @todo use drupal native method to get terms instead of plain SQL
-  $result = db_query(
-    "SELECT t.tid, t.name
-    FROM {taxonomy_term_data} t
-    JOIN {taxonomy_vocabulary} v ON t.vid = v.vid
-    WHERE v.machine_name = 'category'
-    ORDER BY name"
-  );
+  // Find all terms in the event category vocabulary.
+  $category_voc = taxonomy_vocabulary_machine_name_load('category');
+  $result = taxonomy_get_tree($category_voc->vid);
 
   // Load default settings
   $defaults = variable_get('ding_place2book_category_mappings', array());
@@ -164,7 +160,7 @@ function ding_place2book_kultunaut_form($form_state) {
   foreach ($result as $record) {
     $form['ding_place2book_category_mappings'][$record->tid] = array(
       '#type' => 'select',
-      '#title' => 'Term ' . check_plain($record->name),
+      '#title' => t('Term @term', array('@term' => $record->name)),
       '#default_value' => isset($defaults[$record->tid]) ? $defaults[$record->tid] : '',
       '#options' => $kultunaut_category_options,
       '#description' => t('Optional. Select the kultunaut category to map the Ding! event category term to.'),
@@ -178,16 +174,18 @@ function ding_place2book_kultunaut_form($form_state) {
     '#collapsed' => TRUE,
   );
 
-  $kultunaut_target_options = array('' => t('Choose'), 'Alle' => 'Alle', 'Børn' => 'Børn', 'Unge' => 'Unge', 'Voksne' => 'Voksne', 'Ældre' => 'Ældre');
-
-  // Find all terms in the event target vocabulary
-  $result = db_query(
-          "SELECT t.tid, t.name
-            FROM {taxonomy_term_data} t
-            JOIN {taxonomy_vocabulary} v ON t.vid = v.vid
-            WHERE v.machine_name = 'eddb_audience'
-            ORDER BY name"
+  $kultunaut_target_options = array(
+    '' => t('Choose'),
+    'Alle' => 'Alle',
+    'Børn' => 'Børn',
+    'Unge' => 'Unge',
+    'Voksne' => 'Voksne',
+    'Ældre' => 'Ældre'
   );
+
+  // Find all terms in the event target vocabulary.
+  $audience_voc = taxonomy_vocabulary_machine_name_load('eddb_audience');
+  $result = taxonomy_get_tree($audience_voc->vid);
 
   // Load default settings
   $defaults = variable_get('ding_place2book_target_mappings', array());
@@ -195,7 +193,7 @@ function ding_place2book_kultunaut_form($form_state) {
   foreach ($result as $record) {
     $form['ding_place2book_target_mappings'][$record->tid] = array(
       '#type' => 'select',
-      '#title' => 'Term ' . check_plain($record->name),
+      '#title' => t('Term @term', array('@term' => $record->name)),
       '#default_value' => isset($defaults[$record->tid]) ? $defaults[$record->tid] : '',
       '#options' => $kultunaut_target_options,
       '#description' => t('Optional. Select the kultunaut target to map the Ding! event target term to.'),
@@ -213,17 +211,22 @@ function ding_place2book_kultunaut_form($form_state) {
   $defaults = variable_get('ding_place2book_kultunaut_categories', array('kultunaut_cat_array' => ding_place2book_kultunaut_cat_json()));
 
   $form['ding_place2book_kultunaut_categories']['kultunaut_cat_array'] = array(
-      '#type' => 'textarea',
-      '#title' => t('Kultunaut category terms'),
-      '#default_value' => $defaults['kultunaut_cat_array'],
-      '#rows' => 5,
-      '#description' => t("A valid <a target=\"_blank\" href=\"http://en.wikipedia.org/wiki/JSON\">JSON</a> array containing Kultunaut category terms. The included default should not have to be changed - the values have been derived from the Kultunaut category term definitions at <a target=\"_blank\" href=\"http://www.kultunaut.dk/perl/export/nautgenrerxml\">http://www.kultunaut.dk/perl/export/nautgenrerxml</a>."),
-      '#required' => TRUE,
-    );
+    '#type' => 'textarea',
+    '#title' => t('Kultunaut category terms'),
+    '#default_value' => $defaults['kultunaut_cat_array'],
+    '#rows' => 5,
+    '#description' => t("A valid <a target=\"_blank\" href=\"http://en.wikipedia.org/wiki/JSON\">JSON</a> array containing Kultunaut category terms. The included default should not have to be changed - the values have been derived from the Kultunaut category term definitions at <a target=\"_blank\" href=\"http://www.kultunaut.dk/perl/export/nautgenrerxml\">http://www.kultunaut.dk/perl/export/nautgenrerxml</a>."),
+    '#required' => TRUE,
+  );
 
   return system_settings_form($form);
 }
 
+/**
+ * Custom validation handler for settings form.
+ *
+ * @see ding_place2book_kultunaut_form()
+ */
 function ding_place2book_kultunaut_form_validate($form, &$form_state) {
   $field = $form_state['values']['ding_place2book_kultunaut_categories']['kultunaut_cat_array'];
   if (!is_array(json_decode($field, TRUE))) {
@@ -231,11 +234,11 @@ function ding_place2book_kultunaut_form_validate($form, &$form_state) {
   }
 }
 
-/*
+/**
  * Returns a JSON string containing the default Kultunaut category terms found at http://www.kultunaut.dk/perl/export/nautgenrerxml
  */
 function ding_place2book_kultunaut_cat_json() {
-  $json  = '{
+  $json = '{
     "Andet/Ukendt":"(Musik) Andet/Ukendt",
     "Rock/Pop":"(Musik) Rock/Pop",
     "Elektronisk":"(Musik) Elektronisk",
@@ -335,7 +338,7 @@ function ding_place2book_kultunaut_cat_json() {
   return $json;
 }
 
-/*
+/**
  * Returns an array of all Kultunaut category terms
  */
 function place2book_get_kultunaut_categories() {

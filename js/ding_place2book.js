@@ -1,13 +1,16 @@
 /**
  * @file
- *
  * Provide event nodes/pages with ticket info from Place2book
  */
-jQuery(document).ready(function($) {
-	$('.place2book-ticketinfo').each(function() { 
-	    var obj = this;
-		$.getJSON(Drupal.settings.basePath + 'ding/place2book/ticketinfo/' + this.value, function(data) {
-		  $(obj).replaceWith(data['markup']);
-		});		
-    });
-});
+(function ($) {
+  Drupal.behaviors.exampleModule = {
+    attach: function (context, settings) {
+      $('.place2book-ticketinfo', context).each(function() {
+        var obj = this;
+        $.getJSON(Drupal.settings.basePath + 'ding/place2book/ticketinfo/' + this.value, function(data) {
+          $(obj).replaceWith(data['markup']);
+        });
+      });
+    }
+  };
+})(jQuery);
