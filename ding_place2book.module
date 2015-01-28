@@ -261,7 +261,7 @@ function ding_place2book_form_ding_event_node_form_alter(&$form, &$form_state, $
     $node_settings = $form['#node']->place2book;
   }
 
-  $form['group_audience'][LANGUAGE_NONE]['#required'] = TRUE;
+  $form['group_audience'][LANGUAGE_NONE]['#required'] = FALSE;
 
   // Service settings.
   $service_settings = variable_get('ding_place2book', array());
